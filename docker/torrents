@@ -1,0 +1,187 @@
+version: '3.5'
+
+# /data and /config are aliases for zfs_data:subvol-100-disk-0 and zfs_data:subvol-100-disk-1 respectively on the host.
+# We map things in here to /data/data/[stuff] and /config/config/[stuff] so that they show up under zfs_data:subvol-100-disk-0/config/[stuff] and zfs_data:subvol-100-disk-1/data/[stuff].
+# Otherwise, they would show up under zfs_data:subvol-100-disk-0/[stuff] and zfs_data:subvol-100-disk-1/[stuff], which is hard to keep organized.
+# This does not apply to dir references inside the containers (under "environment:")because those use the directories after they have been mapped.
+services:
+ transmission-openvpn:
+    # ipv6 must be enabled for Mullvad to work
+    sysctls:
+        - "net.ipv6.conf.all.disable_ipv6=0"
+    volumes:
+        - /data/data/ingest/media:/media
+        - /data/data/ingest/incomplFete:/incomplete
+        - /data/data/ingest/quarantine:/quarantine
+        - /config/config/transmission:/config
+        - /config/config/scripts:/scripts
+        - /config/config/logs:/logs
+        - /etc/localtime:/etc/localtime:ro
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - CREATE_TUN_DEVICE=true
+        - OPENVPN_PROVIDER=MULLVAD
+        # - OPENVPN_CONFIG=default
+#        - OPENVPN_USERNAME=ADD_ME_BACK_LOL
+        - OPENVPN_PASSWORD=m
+        - OPENVPN_OPTS=--inactive 3600 --ping 10 --ping-exit 60
+        - WEBPROXY_ENABLED=false
+        - LOCAL_NETWORK=192.168.0.0/24
+        - TRANSMISSION_DOWNLOAD_QUEUE_ENABLED=false
+        - TRANSMISSION_QUEUE_STALLED_ENABLED=false
+        - TRANSMISSION_SCRAPE_PAUSED_TORRENTS_ENABLED=false
+        - TRANSMISSION_START_ADDED_TORRENTS=true
+        - TRANSMISSION_DOWNLOAD_DIR="/media/"
+        - TRANSMISSION_INCOMPLETE_DIR_ENABLED=true
+        - TRANSMISSION_INCOMPLETE_DIR="/incomplete"
+        - TRANSMISSION_CONFIG_DIR="/config/torrents/"
+        - TRANSMISSION_SCRIPT_TORRENT_DONE_ENABLED=true
+        - TRANSMISSION_SCRIPT_TORRENT_DONE_FILENAME="/scripts/pt.sh"
+        - TRANSMISSION_WATCH_DIR_ENABLED=true
+        - TRANSMISSION_WATCH_DIR="/config/watch/"
+        - DNS=193.138.218.74
+    #command: >
+    #  bash -c "echo 'nameserver 193.138.218.74' >> /etc/resolv.conf
+    #  && echo 'nameserver 127.0.0.11' >> /etc/resolv.conf"
+    cap_add:
+        - NET_ADMIN
+    logging:
+        driver: json-file
+        options:
+            max-size: 10m
+    ports:
+        #192.168.0.40 is the ipv4 address of the wireless adapter
+        - 3000:3000 #Firefox
+        - 9091:9091 #Transmission
+        - 7878:7878 #Radarr
+        - 8989:8989 #Sonarr
+        - 8686:8686 #Lidarr
+        - 5299:5299 #LazyLibrarian
+        - 9696:9696 #Prowlarr
+        - 8787:8787 #Readarr
+        - 8096:8096 #Jellyfin HTTP
+        - 8920:8920 #Jellyfin HTTPS
+        - 1900:1900 #Jellyfin service auto-discovery
+        - 7359:7359 #Jellyfin auto-dicovery
+    restart: always
+    image: haugene/transmission-openvpn
+ firefox:
+    image: linuxserver/firefox
+    network_mode: "service:transmission-openvpn"
+    container_name: firefox
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/firefox:/config
+
+#    ports:
+#      - 3000:3000
+    shm_size: "1gb"
+    restart: unless-stopped
+
+ radarr:
+    image: linuxserver/radarr
+    network_mode: "service:transmission-openvpn"
+    container_name: radarr
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/radarr:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/radarr:/archive
+    restart: unless-stopped
+ 
+ sonarr:
+    image: linuxserver/sonarr
+    network_mode: "service:transmission-openvpn"
+    container_name: sonarr
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/sonarr:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/sonarr:/archive
+    restart: unless-stopped
+ 
+ lidarr:
+    image: linuxserver/lidarr
+    network_mode: "service:transmission-openvpn"
+    container_name: lidarr
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/lidarr:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/lidarr:/archive
+    restart: unless-stopped
+    
+ prowlarr:
+    image: linuxserver/prowlarr:develop
+    network_mode: "service:transmission-openvpn"
+    container_name: prowlarr
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
+    volumes:
+      - /config/config/prowlarr:/config
+    restart: unless-stopped
+ 
+ readarr:
+    image: linuxserver/readarr:develop
+    network_mode: "service:transmission-openvpn"
+    container_name: readarr
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
+    volumes:
+      - /config/config/readarr:/config
+      - /data/data/ingest/media:/media
+      - /data/data/archive/readarr:/archive
+    restart: unless-stopped
+ 
+ lazylibrarian:
+    image: linuxserver/lazylibrarian
+    network_mode: "service:transmission-openvpn"
+    container_name: lazylibrarian
+    environment:
+        - PUID=1002
+        - PGID=1001
+         - TZ=America/Chicago
+        #- DOCKER_MODS=linuxserver/calibre-web:calibre #optional
+    volumes:
+        - /config/config/lazylibrarian:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/lazylibrarian:/archive
+    restart: unless-stopped
+    
+ jellyfin:
+   image: jellyfin/jellyfin
+   container_name: jellyfin
+   network_mode: "service:transmission-openvpn"
+   volumes:
+     - /config/config/jellyfin:/config
+     - /data/data/ingest/media:/media
+     - /data/data/archive:/archive
+   restart: "unless-stopped"
+    # Optional - alternative address used for autodiscovery
+   environment:
+     - PUID=1002
+     - PGID=1001
+      #- JELLYFIN_PublishedServerUrl=http://example.com

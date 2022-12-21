@@ -5,14 +5,14 @@
   declare -A LOG_LEVELS
   # https://en.wikipedia.org/wiki/Syslog#Severity_level
   LOG_LEVELS=([0]="emerg" [1]="alert" [2]="crit" [3]="err" [4]="warning" [5]="notice" [6]="info" [7]="debug")
-  # Log file, file where we tell what events have been processed.
-  LOG_FILE="/config/logs/pt.log"
+  # File where we tell what events have been processed.
+  LOG_FILE="/logs/pt.log"
   # Put files here if unsure
-  QUARANTINE="/Quarantine/"
+  QUARANTINE="/quarantine/"
   # If file is ok, list it here
-  GOOD_FILES="/config/logs/verified_files.log"  
+  GOOD_FILES="/logs/verified_files.log"  
   # This is where the hybrid analysis script lives
-  HA_SCRIPT="/config/scripts/VxAPI/vxapi.py"
+  HA_SCRIPT="/scripts/antivirus/VxAPI/vxapi.py"
   # Username for transmission remote.
   TR_USERNAME=""
   # Password for transmission remote.
@@ -34,7 +34,11 @@
                           0: emerg, 1: alert,
                           2: crit,  3: err,
                           4: warn,  5: notice,
-                          6: info*, 7: debug"
+                          6: info*, 7: debug
+                          Note: You have to use -v
+                          a bunch of times to change
+                          this level. I haven't bothered
+                          to fix that."
       exit 0
     }
 
@@ -130,10 +134,9 @@
     .log 7 $summary
     if [[ $finished == "true" ]]; then
         # Done scanning, analyze
-        # TODO: is it "no specific threat" or "no-specific-threat"
-        # verdict has "malicious", "suspicious", "no specific threat", "unknown", "null"
+        # verdict has "malicious", "suspicious", "no specific threat", "unknown", "whitelisted", "null"
         verdict=$(echo $summary | jq -r ".verdict")
-        if [[ $verdict == "no specific threat" ]]; then
+        if [[ $verdict == "no specific threat" ]] || [[ $verdict == "whitelisted" ]]; then
               # Grab the path to the parent dir 
               parent=$(dirname "$entry")
               # Note the file is good

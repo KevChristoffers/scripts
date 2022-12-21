@@ -8,15 +8,14 @@
   # Scan all files in here
   SRC_DIR="$(echo $PWD)"
   # Log file, file where we tell what events have been processed.
-  LOG_FILE="/config/logs/scd.log"
+  LOG_FILE="/config/config/logs/docker-scd.log"
   # If file is ok, list it here
-  GOOD_FILES="/config/logs/verified_files.log"
+  GOOD_FILES="/config/config/logs/verified_files.log"
   # Put files here if unsure
-  QUARANTINE="/Quarantine/"
+  QUARANTINE="/data/data/quarantine/"
   # This is where the hybrid analysis script lives
-  HA_SCRIPT="/config/scripts/VxAPI/vxapi.py"
+  HA_SCRIPT="/config/config/scripts/antivirus/VxAPI/vxapi.py"
   # Sleep for this long when waiting for VT API to chill
-  # 1 call every 173s = 500 API calls/day
   SLEEP_SEC=10
   # Try for this many times to upload the file
   SCAN_ATTEMPTS=8
@@ -31,7 +30,11 @@
                           0: emerg, 1: alert,
                           2: crit,  3: err,
                           4: warn,  5: notice,
-                          6: info*, 7: debug"
+                          6: info*, 7: debug
+                          Note: You have to use -v
+                          a bunch of times to change
+                          this level. I haven't bothered
+                          to fix that."
       exit 0
     }
 
@@ -127,10 +130,9 @@
     .log 7 $summary
     if [[ $finished == "true" ]]; then
         # Done scanning, analyze
-        # TODO: is it "no specific threat" or "no-specific-threat"
-        # verdict has "malicious", "suspicious", "no specific threat", "unknown", "null"
+        # verdict has "malicious", "suspicious", "no specific threat", "unknown", "whitelisted", "null"
         verdict=$(echo $summary | jq -r ".verdict")
-        if [[ $verdict == "no specific threat" ]]; then
+        if [[ $verdict == "no specific threat" ]] || [[ $verdict == "whitelisted" ]]; then
               # Grab the path to the parent dir 
               parent=$(dirname "$entry")
               # Note the file is good
