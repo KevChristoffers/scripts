@@ -1,0 +1,3 @@
+[submodule "antivirus/VxAPI"]
+	path = antivirus/VxAPI
+	url = https://github.com/PayloadSecurity/VxAPI.git
