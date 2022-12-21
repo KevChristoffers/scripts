@@ -1,4 +1,3 @@
-# bash-scrpits
-Repo for bash scritpts - mostly uploads to virus scanner websites
-
-Some scripts require the [hybrid analysis api](https://github.com/PayloadSecurity/VxAPI) to function properly.
+# scrpits
+Various automation scripts.
+Check out the READMEs in the languages you're interested in for more info.
