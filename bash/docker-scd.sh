@@ -12,7 +12,7 @@
   # If file is ok, list it here
   GOOD_FILES="/config/config/logs/verified_files.log"
   # Put files here if unsure
-  QUARANTINE="/data/data/quarantine/"
+  QUARANTINE="/data/data/ingest/quarantine/"
   # This is where the hybrid analysis script lives
   HA_SCRIPT="/config/config/scripts/antivirus/VxAPI/vxapi.py"
   # Sleep for this long when waiting for VT API to chill
@@ -144,13 +144,13 @@
             # Quarantine
             .log 6 "'$entry' verdict is $verdict. Will Quarantine and log summary"
             .log 4 $summary
-            cp "$entry" "$QUARANTINE" && rm "$entry"
+            rsync -av --append-verify --remove-source-files  "$entry" "$QUARANTINE"
             .log 6 "Quarantine move successful"
         else
             # Bad file, delete and log
             .log 1 "VIRUS FOUND:'$entry' deemed $verdict! Attempting deletion"
             .log 4 $summary
-            rm "$entry"
+            rm -f "$entry"
             .log 6 "Deletion successful"
             exit 0
         fi
@@ -158,7 +158,7 @@
         # Didn't finish, something wrong?
         .log 6 "'$entry' could not be scanned in $attempt attempts. Will Quarantine and log summary"
         .log 4 $summary
-        cp "$entry" "$QUARANTINE" && rm "$entry"
+        rsync -av --append-verify --remove-source-files  "$entry" "$QUARANTINE"
     fi
     .log 6 "sleeping for $SLEEP_SEC seconds"
     # Always sleep

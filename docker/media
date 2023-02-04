@@ -4,14 +4,18 @@ version: '3.5'
 # We map things in here to /data/data/[stuff] and /config/config/[stuff] so that they show up under zfs_data:subvol-100-disk-0/config/[stuff] and zfs_data:subvol-100-disk-1/data/[stuff].
 # Otherwise, they would show up under zfs_data:subvol-100-disk-0/[stuff] and zfs_data:subvol-100-disk-1/[stuff], which is hard to keep organized.
 # This does not apply to dir references inside the containers (under "environment:")because those use the directories after they have been mapped.
+# *arr services are killing the lxc. Restricting them with mem_reservation, which is only invoked when running out of space. This is not a hard cap.
+# mem_limit is a hard cap. mem_reservation didn't seem to help.
+# cpus sets a hard limit. 1.0 = 1 core max per app
 services:
  transmission-openvpn:
+    image: haugene/transmission-openvpn
     # ipv6 must be enabled for Mullvad to work
     sysctls:
         - "net.ipv6.conf.all.disable_ipv6=0"
     volumes:
         - /data/data/ingest/media:/media
-        - /data/data/ingest/incomplFete:/incomplete
+        - /data/data/ingest/incomplete:/incomplete
         - /data/data/ingest/quarantine:/quarantine
         - /config/config/transmission:/config
         - /config/config/scripts:/scripts
@@ -23,7 +27,7 @@ services:
         - CREATE_TUN_DEVICE=true
         - OPENVPN_PROVIDER=MULLVAD
         # - OPENVPN_CONFIG=default
-#        - OPENVPN_USERNAME=ADD_ME_BACK_LOL
+        - OPENVPN_USERNAME: # This value is defined on the host.
         - OPENVPN_PASSWORD=m
         - OPENVPN_OPTS=--inactive 3600 --ping 10 --ping-exit 60
         - WEBPROXY_ENABLED=false
@@ -32,12 +36,12 @@ services:
         - TRANSMISSION_QUEUE_STALLED_ENABLED=false
         - TRANSMISSION_SCRAPE_PAUSED_TORRENTS_ENABLED=false
         - TRANSMISSION_START_ADDED_TORRENTS=true
+        - TRANSMISSION_HOME="/config"
         - TRANSMISSION_DOWNLOAD_DIR="/media/"
         - TRANSMISSION_INCOMPLETE_DIR_ENABLED=true
         - TRANSMISSION_INCOMPLETE_DIR="/incomplete"
-        - TRANSMISSION_CONFIG_DIR="/config/torrents/"
         - TRANSMISSION_SCRIPT_TORRENT_DONE_ENABLED=true
-        - TRANSMISSION_SCRIPT_TORRENT_DONE_FILENAME="/scripts/pt.sh"
+        - TRANSMISSION_SCRIPT_TORRENT_DONE_FILENAME="/scripts/bash/pt.sh"
         - TRANSMISSION_WATCH_DIR_ENABLED=true
         - TRANSMISSION_WATCH_DIR="/config/watch/"
         - DNS=193.138.218.74
@@ -51,7 +55,6 @@ services:
         options:
             max-size: 10m
     ports:
-        #192.168.0.40 is the ipv4 address of the wireless adapter
         - 3000:3000 #Firefox
         - 9091:9091 #Transmission
         - 7878:7878 #Radarr
@@ -64,43 +67,42 @@ services:
         - 8920:8920 #Jellyfin HTTPS
         - 1900:1900 #Jellyfin service auto-discovery
         - 7359:7359 #Jellyfin auto-dicovery
+        - 5800:5800 #Picard
+        - 6080:6080 #Soulseek
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
+    command: bash -c "apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh"
     restart: always
-    image: haugene/transmission-openvpn
- firefox:
-    image: linuxserver/firefox
-    network_mode: "service:transmission-openvpn"
-    container_name: firefox
-    environment:
-        - PUID=1002
-        - PGID=1001
-        - TZ=America/Chicago
-        - UMASK_SET=022 #optional
-    volumes:
-        - /config/config/firefox:/config
 
-#    ports:
-#      - 3000:3000
-    shm_size: "1gb"
-    restart: unless-stopped
+
 
  radarr:
     image: linuxserver/radarr
     network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
     container_name: radarr
     environment:
         - PUID=1002
         - PGID=1001
         - TZ=America/Chicago
         - UMASK_SET=022 #optional
+
     volumes:
         - /config/config/radarr:/config
         - /data/data/ingest/media:/media
         - /data/data/archive/radarr:/archive
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
     restart: unless-stopped
  
  sonarr:
     image: linuxserver/sonarr
     network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
     container_name: sonarr
     environment:
         - PUID=1002
@@ -111,11 +113,16 @@ services:
         - /config/config/sonarr:/config
         - /data/data/ingest/media:/media
         - /data/data/archive/sonarr:/archive
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
     restart: unless-stopped
  
  lidarr:
     image: linuxserver/lidarr
     network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
     container_name: lidarr
     environment:
         - PUID=1002
@@ -126,11 +133,16 @@ services:
         - /config/config/lidarr:/config
         - /data/data/ingest/media:/media
         - /data/data/archive/lidarr:/archive
+    mem_reservation: 256m
+    mem_limit: 512m
+    cpus: 1.0
     restart: unless-stopped
     
  prowlarr:
     image: linuxserver/prowlarr:develop
     network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
     container_name: prowlarr
     environment:
       - PUID=1002
@@ -139,11 +151,16 @@ services:
       - UMASK_SET=022 #optional
     volumes:
       - /config/config/prowlarr:/config
+    mem_reservation: 512m
+    mem_limit: 576m
+    cpus: 2.0
     restart: unless-stopped
  
  readarr:
     image: linuxserver/readarr:develop
     network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
     container_name: readarr
     environment:
       - PUID=1002
@@ -154,34 +171,67 @@ services:
       - /config/config/readarr:/config
       - /data/data/ingest/media:/media
       - /data/data/archive/readarr:/archive
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
     restart: unless-stopped
- 
- lazylibrarian:
-    image: linuxserver/lazylibrarian
+     
+ jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
     network_mode: "service:transmission-openvpn"
-    container_name: lazylibrarian
-    environment:
-        - PUID=1002
-        - PGID=1001
-         - TZ=America/Chicago
-        #- DOCKER_MODS=linuxserver/calibre-web:calibre #optional
+    depends_on:
+        - transmission-openvpn
     volumes:
-        - /config/config/lazylibrarian:/config
-        - /data/data/ingest/media:/media
-        - /data/data/archive/lazylibrarian:/archive
+      - /config/config/jellyfin:/config
+      - /data/data/ingest/media:/media
+      - /data/data/archive:/archive
+     # Optional - alternative address used for autodiscovery
+    environment:
+      - PUID=1002
+      - PGID=1001
+#      - JELLYFIN_PublishedServerUrl=http://example.com
+
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
+    restart: "unless-stopped"
+   
+ picard:
+    image: mikenye/picard
+    container_name: picard
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
+    volumes:
+      - /config/config/picard:/config:rw
+      - /data/data/archive/lidarr:/archive:rw
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - MUSICBRAINZ_STANDALONE_SERVER=1
+    mem_reservation: 512m
+    mem_limit: 1g
+    cpus: 1.0
     restart: unless-stopped
     
- jellyfin:
-   image: jellyfin/jellyfin
-   container_name: jellyfin
-   network_mode: "service:transmission-openvpn"
-   volumes:
-     - /config/config/jellyfin:/config
-     - /data/data/ingest/media:/media
-     - /data/data/archive:/archive
-   restart: "unless-stopped"
-    # Optional - alternative address used for autodiscovery
-   environment:
-     - PUID=1002
-     - PGID=1001
-      #- JELLYFIN_PublishedServerUrl=http://example.com
+ soulseek:
+    image: realies/soulseek
+    container_name: soulseek
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+        - transmission-openvpn
+    volumes:
+      - /config/config/soulseek:/.SoulseekQt
+      - /data/data/ingest:/downloads
+      - /config/config/soulseek/logs:/chat
+      - /data/data/archive/lidarr:/shared
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - UMASK_SET=022 #optional
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
+    restart: unless-stopped
+        
