@@ -18,6 +18,7 @@ services:
         - /data/data/ingest/incomplete:/incomplete
         - /data/data/ingest/quarantine:/quarantine
         - /config/config/transmission:/config
+
         - /config/config/scripts:/scripts
         - /config/config/logs:/logs
         - /etc/localtime:/etc/localtime:ro
@@ -26,9 +27,9 @@ services:
         - PGID=1001
         - CREATE_TUN_DEVICE=true
         - OPENVPN_PROVIDER=MULLVAD
-        # - OPENVPN_CONFIG=default
-        - OPENVPN_USERNAME: # This value is defined on the host.
-        - OPENVPN_PASSWORD=m
+        - OPENVPN_CONFIG=default
+#        - OPENVPN_USERNAME=${OPENVPN_USERNAME} # This value is defined on the host.
+#        - OPENVPN_PASSWORD=m
         - OPENVPN_OPTS=--inactive 3600 --ping 10 --ping-exit 60
         - WEBPROXY_ENABLED=false
         - LOCAL_NETWORK=192.168.0.0/24
@@ -45,9 +46,6 @@ services:
         - TRANSMISSION_WATCH_DIR_ENABLED=true
         - TRANSMISSION_WATCH_DIR="/config/watch/"
         - DNS=193.138.218.74
-    #command: >
-    #  bash -c "echo 'nameserver 193.138.218.74' >> /etc/resolv.conf
-    #  && echo 'nameserver 127.0.0.11' >> /etc/resolv.conf"
     cap_add:
         - NET_ADMIN
     logging:
@@ -72,7 +70,9 @@ services:
     mem_reservation: 256m
     mem_limit: 300m
     cpus: 1.0
-    command: bash -c "apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh"
+    command: bash -c "echo '$OPENVPN_USERNAME' > /config/openvpn-credentials.txt; echo 'm' >> /config/openvpn-credentials.txt; cat /config/openvpn-credentials.txt; apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh"
+    #  bash -c "echo 'nameserver 193.138.218.74' >> /etc/resolv.conf
+    #  && echo 'nameserver 127.0.0.11' >> /etc/resolv.conf"
     restart: always
 
 
