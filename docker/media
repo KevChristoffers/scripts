@@ -75,7 +75,24 @@ services:
     #  && echo 'nameserver 127.0.0.11' >> /etc/resolv.conf"
     restart: always
 
+ firefox:
+    image: lscr.io/linuxserver/firefox:latest
+    network_mode: "service:transmission-openvpn"
+    container_name: firefox
+#    security_opt:
+#      - seccomp:unconfined #optional
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+    volumes:
+      - /config/config/firefox:/config
 
+    shm_size: "1gb"
+    mem_reservation: 500m
+    mem_limit: 1g
+    cpus: 1.0
+    restart: unless-stopped
 
  radarr:
     image: linuxserver/radarr
