@@ -148,13 +148,16 @@
             # Quarantine
             .log 6 "'$entry' verdict is $verdict. Will Quarantine and log summary"
             .log 4 $summary
-            cp "$entry" "$QUARANTINE" && rm "$entry"
+            rsync -av --append-verify --remove-source-files  "$entry" "$QUARANTINE"
             .log 6 "Quarantine move successful"
         else
             # Bad file, delete and log
             .log 1 "VIRUS FOUND:'$entry' deemed $verdict! Attempting deletion"
             .log 4 $summary
-            rm "$entry"
+            #Deletion requires an id, first get a hash
+            transmission_hash=$( transmission-show "${TR_TORRENT_NAME}" | perl -n -E 'say $1 if /^\s*Hash: (.+)$/' )
+            transmission_id="$(transmission-remote -t "$transmission_hash" -i | perl -n -E 'say $1 if /^\s*Id: ([0-9]+)$/' )"
+            transmission-remote -t "$transmission_hash" --remove-and-delete
             .log 6 "Deletion successful"
             exit 0
         fi
@@ -162,7 +165,7 @@
         # Didn't finish, something wrong?
         .log 6 "'$entry' could not be scanned in $attempt attempts. Will Quarantine and log summary"
         .log 4 $summary
-        cp "$entry" "$QUARANTINE" && rm "$entry"
+        rsync -av --append-verify --remove-source-files  "$entry" "$QUARANTINE"
     fi
     .log 6 "sleeping for $SLEEP_SEC seconds"
     # Always sleep
