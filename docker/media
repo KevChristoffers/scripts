@@ -77,7 +77,7 @@ services:
     mem_limit: 512m
     cpus: 1.0
 
-    command: bash -c "apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync natpmpc -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh & while true ; do AUTH=$$(cat /config/.user):$$(cat /config/.pass); transmission-remote --auth $$AUTH -p $$((natpmpc -a 0 0 udp 60; natpmpc -a 0 0 tcp 60) | grep 'UDP to local port'| cut -d\\  -f10); sleep 45 ; done"
+    command: bash -c "apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync natpmpc -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh & while true ; do AUTH=$$(sed -n '1p' /config/transmission-credentials.txt):$$(sed -n '2p' /config/transmission-credentials.txt); transmission-remote --auth $$AUTH -p $$((natpmpc -a 0 0 udp 60; natpmpc -a 0 0 tcp 60) | grep 'UDP to local port'| cut -d\\  -f10); sleep 45 ; done"
     restart: always
 
  firefox:
