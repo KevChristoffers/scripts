@@ -8,9 +8,10 @@ version: '3.5'
 # mem_limit is a hard cap. mem_reservation didn't seem to help.
 # cpus sets a hard limit. 1.0 = 1 core max per app
 services:
+
  transmission-openvpn:
     image: haugene/transmission-openvpn:latest
-    network_mode: "TransmissionVPN"
+#    network_mode: "TransmissionVPN"
     # ipv6 must be enabled for Mullvad to work
     sysctls:
         - "net.ipv6.conf.all.disable_ipv6=0"
@@ -19,7 +20,7 @@ services:
         - /data/data/ingest/incomplete:/incomplete
         - /data/data/ingest/quarantine:/quarantine
         - /config/config/transmission:/config
-
+        - /config/config/transmission-openvpn:/etc/openvpn/custom
         - /config/config/scripts:/scripts
         - /config/config/logs:/logs
         - /etc/localtime:/etc/localtime:ro
@@ -27,10 +28,10 @@ services:
         - PUID=1002
         - PGID=1001
         - CREATE_TUN_DEVICE=true
-        - OPENVPN_PROVIDER=MULLVAD
-        - OPENVPN_CONFIG=ch_all
-#        - OPENVPN_USERNAME=${OPENVPN_USERNAME} # This value is defined on the host.
-#        - OPENVPN_PASSWORD=m
+        - OPENVPN_PROVIDER=custom
+        - OPENVPN_CONFIG=node-ch-11.protonvpn.net.udp
+        - OPENVPN_USERNAME=$OPENVPN_USERNAME
+        - OPENVPN_PASSWORD=$OPENVPN_PASSWORD
         - OPENVPN_OPTS=--inactive 3600 --ping 10 --ping-exit 60
         - WEBPROXY_ENABLED=false
         - LOCAL_NETWORK=192.168.0.0/24
@@ -48,7 +49,10 @@ services:
         - TRANSMISSION_SCRIPT_TORRENT_DONE_FILENAME="/scripts/bash/pt.sh"
         - TRANSMISSION_WATCH_DIR_ENABLED=true
         - TRANSMISSION_WATCH_DIR="/config/watch/"
-        - DNS=193.138.218.74
+        - TRANSMISSION_RPC_AUTHENTICATION_REQUIRED=true
+        - TRANSMISSION_RPC_USERNAME=$TRANSMISSION_USER
+        - TRANSMISSION_RPC_PASSWORD=$TRANSMISSION_PASS
+#        - DNS=193.138.218.74
     cap_add:
         - NET_ADMIN
     logging:
@@ -72,14 +76,15 @@ services:
     mem_reservation: 256m
     mem_limit: 512m
     cpus: 1.0
-    command: bash -c "echo '$OPENVPN_USERNAME' > /config/openvpn-credentials.txt; echo 'm' >> /config/openvpn-credentials.txt; apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh"
-    #  bash -c "echo 'nameserver 193.138.218.74' >> /etc/resolv.conf
-    #  && echo 'nameserver 127.0.0.11' >> /etc/resolv.conf"
+
+    command: bash -c "apt-get update; apt-get upgrade -y; apt-get install python3-pip rsync natpmpc -y; python3 -m pip install colorama requests; /etc/openvpn/start.sh & while true ; do transmission-remote --auth $$(cat /config/.user):$$(cat /config/.pass) -p $$((natpmpc -a 0 0 udp 60; natpmpc -a 0 0 tcp 60) | grep 'UDP to local port'| cut -d\\  -f10); sleep 45 ; done"
     restart: always
 
  firefox:
     image: jlesage/firefox
     network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
     container_name: firefox
 #    security_opt:
 #      - seccomp:unconfined #optional
@@ -88,7 +93,6 @@ services:
       - PGID=1001
       - TZ=America/Chicago
       - UMASK_SET=022 #optional
-
     volumes:
       - /config/config/firefox:/config
     shm_size: "1gb"
@@ -97,18 +101,92 @@ services:
 #    cpus: 1.0
     restart: unless-stopped
 
- radarr:
-    image: linuxserver/radarr
+ flaresolverr:
+    # DockerHub mirror flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:latest
     network_mode: "service:transmission-openvpn"
     depends_on:
-        - transmission-openvpn
-    container_name: radarr
+      - transmission-openvpn
+    container_name: flaresolverr
     environment:
         - PUID=1002
         - PGID=1001
         - TZ=America/Chicago
         - UMASK_SET=022 #optional
+        - LOG_LEVEL=debug
+        - LOG_HTML=true
+        - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+    restart: unless-stopped
 
+ lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/lazylibrarian:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/lazylibrarian:/archive
+    mem_reservation: 256m
+    mem_limit: 300m
+    cpus: 1.0
+    restart: unless-stopped
+
+ lidarr:
+    image: lscr.io/linuxserver/lidarr
+    container_name: lidarr
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
+    volumes:
+        - /config/config/lidarr:/config
+        - /data/data/ingest/media:/media
+        - /data/data/archive/lidarr:/archive
+#    mem_reservation: 256m
+#    mem_limit: 512m
+#    cpus: 1.0
+    restart: unless-stopped
+
+ prowlarr:
+    image: lscr.io/linuxserver/prowlarr:develop
+    container_name: prowlarr
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
+    volumes:
+      - /config/config/prowlarr:/config
+    mem_reservation: 512m
+    mem_limit: 576m
+    cpus: 2.0
+    restart: unless-stopped
+
+ radarr:
+    image: lscr.io/linuxserver/radarr
+    container_name: radarr
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
+    environment:
+        - PUID=1002
+        - PGID=1001
+        - TZ=America/Chicago
+        - UMASK_SET=022 #optional
     volumes:
         - /config/config/radarr:/config
         - /data/data/ingest/media:/media
@@ -118,12 +196,29 @@ services:
     cpus: 1.0
     restart: unless-stopped
  
- sonarr:
-    image: linuxserver/sonarr
+ readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
     network_mode: "service:transmission-openvpn"
     depends_on:
-        - transmission-openvpn
+      - transmission-openvpn
+    environment:
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
+    volumes:
+      - /config/config/readarr:/config
+      - /data/data/ingest/media:/media
+      - /data/data/archive/readarr:/archive
+    restart: unless-stopped
+ 
+ sonarr:
+    image: lscr.io/linuxserver/sonarr
     container_name: sonarr
+    network_mode: "service:transmission-openvpn"
+    depends_on:
+      - transmission-openvpn
     environment:
         - PUID=1002
         - PGID=1001
@@ -137,74 +232,29 @@ services:
     mem_limit: 300m
     cpus: 1.0
     restart: unless-stopped
- 
- lidarr:
-    image: linuxserver/lidarr
+
+ speakarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: speakarr
     network_mode: "service:transmission-openvpn"
     depends_on:
-        - transmission-openvpn
-    container_name: lidarr
+      - transmission-openvpn
     environment:
-        - PUID=1002
-        - PGID=1001
-        - TZ=America/Chicago
-        - UMASK_SET=022 #optional
+      - PUID=1002
+      - PGID=1001
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
     volumes:
-        - /config/config/lidarr:/config
-        - /data/data/ingest/media:/media
-        - /data/data/archive/lidarr:/archive
-    mem_reservation: 256m
-    mem_limit: 512m
-    cpus: 1.0
+      - /config/config/speakarr:/config
+      - /data/data/ingest/media:/media
+      - /data/data/archive/speakarr:/archive
     restart: unless-stopped
     
- prowlarr:
-    image: linuxserver/prowlarr:develop
-    network_mode: "service:transmission-openvpn"
-    depends_on:
-        - transmission-openvpn
-    container_name: prowlarr
-    environment:
-      - PUID=1002
-      - PGID=1001
-      - TZ=America/Chicago
-      - UMASK_SET=022 #optional
-    volumes:
-      - /config/config/prowlarr:/config
-    mem_reservation: 512m
-    mem_limit: 576m
-    cpus: 2.0
-    restart: unless-stopped
- 
- readarr:
-    image: linuxserver/readarr:develop
-    network_mode: "service:transmission-openvpn"
-    depends_on:
-        - transmission-openvpn
-    container_name: readarr
-    environment:
-      - PUID=1002
-      - PGID=1001
-      - TZ=America/Chicago
-      - UMASK_SET=022 #optional
-    volumes:
-      - /config/config/readarr:/config
-      - /data/data/ingest/media:/media
-      - /data/data/archive/readarr:/archive
-    mem_reservation: 256m
-    mem_limit: 300m
-    cpus: 1.0
-    restart: unless-stopped
-     
  jellyfin:
-    image: jellyfin/jellyfin
+    image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
-#    network_mode: "service:transmission-openvpn"
-#    depends_on:
-#        - transmission-openvpn
     volumes:
       - /config/config/jellyfin:/config
-#      - /data/data/ingest/media:/media
       - /data/data/archive:/archive
      # Optional - alternative address used for autodiscovery
     environment:
@@ -216,45 +266,46 @@ services:
       - 8920:8920 #Jellyfin HTTPS
       - 1900:1900 #Jellyfin service auto-discovery
       - 7359:7359 #Jellyfin auto-dicovery
-#    mem_reservation: 256m
-#    mem_limit: 300m
-#    cpus: 1.0
+#    command: bash -c "echo 'deb http://deb.debian.org/debian/ bullseye main contrib non-free' >> /etc/apt/sources.list; apt-get update; apt-get upgrade -y; apt-get install jellyfin-ffmpeg5 nvidia-driver firmware-misc-nonfree -y"
     restart: "unless-stopped"
    
- picard:
-    image: mikenye/picard
-    container_name: picard
-    network_mode: "service:transmission-openvpn"
-    depends_on:
-        - transmission-openvpn
-    volumes:
-      - /config/config/picard:/config
-      - /data/data/archive/lidarr:/archive
-    environment:
-      - USER_ID=1002
-      - GROUP_ID=1001
-      - MUSICBRAINZ_STANDALONE_SERVER=1
+# picard:
+#    image: mikenye/picard
+#    container_name: picard
+#    network_mode: "service:wireguard"
+#    depends_on:
+#      - wireguard
+#    volumes:
+#      - /config/config/picard:/config
+#      - /data/data/archive/lidarr:/archive
+#    environment:
+#      - USER_ID=1002
+#      - GROUP_ID=1001
+#      - MUSICBRAINZ_STANDALONE_SERVER=1
       # Take Picard's 5800 info and put it on Transmission's 5801 port.
 #    mem_reservation: 512m
 #    mem_limit: 1g
 #    cpus: 1.0
-    restart: unless-stopped
+#    restart: unless-stopped
     
  soulseek:
     image: realies/soulseek
     container_name: soulseek
     network_mode: "service:transmission-openvpn"
     depends_on:
-        - transmission-openvpn
+      - transmission-openvpn
+#Updated container vols to follow default paths
     volumes:
       - /config/config/soulseek:/.SoulseekQt
-      - /data/data/ingest/soulseek:/downloads
-      - /config/config/soulseek/logs:/chat
-      - /data/data/archive/lidarr:/shared
+      - /data/data/ingest/soulseek:/data/Soulseek Downloads
+      - /config/config/soulseek/logs:/data/Soulseek Chat Logs
+      - /data/data/archive/lidarr:/data/Soulseek Shared Folder
+#Having a lot of trouble getting configs to save
+#Thinking it might be a permissions issue
     environment:
-      - PUID=1002
-      - PGID=1001
-      - UMASK_SET=022 #optional
+      - PUID=1000 #DEBUGKC - root
+      - PGID=1000 #DEBUGKC - root
+      - UMASK_SET=0000 #DEBUGKC - was 022
     mem_reservation: 256m
     mem_limit: 512m
     cpus: 1.0
